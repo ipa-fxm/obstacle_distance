@@ -14,7 +14,7 @@ public:
 
         for (it; it != fcl_objs_.end(); ++it)
         {
-            obj.push_back(it->second.collision_objects_[0]);
+            obj.push_back(it->second.collision_objects_[0]);    // ToDo: in what case is this > 1?
         }
     }
 };
@@ -128,7 +128,7 @@ void ObstacleDistance::calculateDistanceTimerCallback(const ros::TimerEvent& eve
     {
         std::string robot_link_name = *link_it;
         const boost::shared_ptr<fcl::CollisionObject> robot_object = robot_links[robot_link_name];
-        ROS_DEBUG_STREAM("RobotLink: " << robot_link_name << ", Type: " << robot_object->getObjectType());
+        ROS_INFO_STREAM("RobotLink: " << robot_link_name << ", Type: " << robot_object->getObjectType());
         
         ///// testing
         //std::string robot_link_name = "test_primitive";
@@ -145,7 +145,7 @@ void ObstacleDistance::calculateDistanceTimerCallback(const ros::TimerEvent& eve
         {
             std::string collision_object_name = obj_it->first;
             const boost::shared_ptr<fcl::CollisionObject> collision_object = collision_objects[collision_object_name];
-            ROS_DEBUG_STREAM("CollisionLink: " << collision_object_name << ", Type: " << collision_object->getObjectType());
+            ROS_INFO_STREAM("CollisionLink: " << collision_object_name << ", Type: " << collision_object->getObjectType());
 
             obstacle_distance::DistanceInfo info;
             info = getDistanceInfo(robot_object, collision_object);
@@ -158,34 +158,34 @@ void ObstacleDistance::calculateDistanceTimerCallback(const ros::TimerEvent& eve
             distance_infos.infos.push_back(info);
         }
 
-        std::map<std::string, boost::shared_ptr<fcl::CollisionObject> >::iterator selfcollision_it;
-        for (selfcollision_it = robot_links.begin(); selfcollision_it != robot_links.end(); ++selfcollision_it)
-        {
-            std::string robot_self_name = selfcollision_it->first;
-            collision_detection::AllowedCollision::Type type;
-            if(acm.getEntry(robot_link_name, robot_self_name, type))
-            {
-                if(type == collision_detection::AllowedCollision::NEVER)
-                {
-                    const boost::shared_ptr<fcl::CollisionObject> robot_self_object = robot_links[robot_self_name];
-                    ROS_DEBUG_STREAM("CollisionLink: " << robot_self_name << ", Type: " << robot_self_object->getObjectType());
+        //std::map<std::string, boost::shared_ptr<fcl::CollisionObject> >::iterator selfcollision_it;
+        //for (selfcollision_it = robot_links.begin(); selfcollision_it != robot_links.end(); ++selfcollision_it)
+        //{
+            //std::string robot_self_name = selfcollision_it->first;
+            //collision_detection::AllowedCollision::Type type;
+            //if(acm.getEntry(robot_link_name, robot_self_name, type))
+            //{
+                //if(type == collision_detection::AllowedCollision::NEVER)
+                //{
+                    //const boost::shared_ptr<fcl::CollisionObject> robot_self_object = robot_links[robot_self_name];
+                    //ROS_DEBUG_STREAM("CollisionLink: " << robot_self_name << ", Type: " << robot_self_object->getObjectType());
                     
-                    obstacle_distance::DistanceInfo info;
-                    info = getDistanceInfo(robot_object, robot_self_object);
+                    //obstacle_distance::DistanceInfo info;
+                    //info = getDistanceInfo(robot_object, robot_self_object);
 
-                    info.header.frame_id = planning_frame;
-                    info.header.stamp = event.current_real;
-                    info.link_of_interest = robot_link_name;
-                    info.obstacle_id = robot_self_name;
+                    //info.header.frame_id = planning_frame;
+                    //info.header.stamp = event.current_real;
+                    //info.link_of_interest = robot_link_name;
+                    //info.obstacle_id = robot_self_name;
 
-                    distance_infos.infos.push_back(info);
-                }
-                else
-                {
-                    // This is diagonal of allowed collision matrix
-                }
-            }
-        }
+                    //distance_infos.infos.push_back(info);
+                //}
+                //else
+                //{
+                    //// This is diagonal of allowed collision matrix
+                //}
+            //}
+        //}
     }
     distance_pub_.publish(distance_infos);
 }
@@ -245,6 +245,44 @@ obstacle_distance::DistanceInfo ObstacleDistance::getDistanceInfo(const boost::s
 
     double dist = fcl::distance(object_a.get(), object_b.get(), req, res);
 
+    ROS_WARN_STREAM("DistanceResult:");
+    ROS_INFO_STREAM("\t dist:" << dist);
+    ROS_INFO_STREAM("\t res.min_distance:" << res.min_distance);
+    ROS_INFO_STREAM("\t b1:" << res.b1);
+    ROS_INFO_STREAM("\t o1.ObjectType:" << res.o1->getObjectType());
+    ROS_INFO_STREAM("\t o1.NodeType:" << res.o1->getNodeType());
+    if (res.o1->isOccupied()) ROS_INFO_STREAM("\t o1.isOccupied");
+    if (res.o1->isFree()) ROS_INFO_STREAM("\t o1.isFree");
+    ROS_INFO_STREAM("\t b2:" << res.b2);
+    ROS_INFO_STREAM("\t o2.ObjectType:" << res.o2->getObjectType());
+    ROS_INFO_STREAM("\t o2.NodeType:" << res.o2->getNodeType());
+    if (res.o2->isOccupied()) ROS_INFO_STREAM("\t o2.isOccupied");
+    if (res.o2->isFree()) ROS_INFO_STREAM("\t o2.isFree");
+
+
+    if (res.o1->getObjectType() == fcl::OT_OCTREE)
+    {
+        ROS_WARN_STREAM("o1");
+        const fcl::OcTree *oc_tree1 =
+                dynamic_cast<const fcl::OcTree *>(res.o1);
+
+        std::vector<boost::array<fcl::FCL_REAL, 6> > boxes1 = oc_tree1->toBoxes();
+        ROS_WARN_STREAM("o1.Boxes.size: " << boxes1.size());
+        
+        octomap::OcTreeNode* tree1_node = oc_tree1->getRoot();
+    }
+    if (res.o2->getObjectType() == fcl::OT_OCTREE)
+    {
+        ROS_WARN_STREAM("o2");
+        const fcl::OcTree *oc_tree2 =
+                dynamic_cast<const fcl::OcTree *>(res.o2);
+
+        std::vector<boost::array<fcl::FCL_REAL, 6> > boxes2 = oc_tree2->toBoxes();
+        ROS_WARN_STREAM("o2.Boxes.size: " << boxes2.size());
+        
+        octomap::OcTreeNode* tree2_node = oc_tree2->getRoot();
+    }
+
     // this is to prevent what seems to be a nasty bug in fcl
     if(object_a->getObjectType() == fcl::OT_GEOM && object_b->getObjectType() == fcl::OT_BVH)
     {
@@ -271,11 +309,11 @@ obstacle_distance::DistanceInfo ObstacleDistance::getDistanceInfo(const boost::s
 
     geometry_msgs::Vector3 np_object_a_msg;
     tf::vectorEigenToMsg(np_object_a, np_object_a_msg);
-    ROS_DEBUG_STREAM("NearestPoint OBJ_A: \n" << np_object_a_msg);
+    ROS_INFO_STREAM("NearestPoint OBJ_A: \n" << np_object_a_msg);
 
     geometry_msgs::Vector3 np_object_b_msg;
     tf::vectorEigenToMsg(np_object_b, np_object_b_msg);
-    ROS_DEBUG_STREAM("NearestPoint OBJ_B: \n" << np_object_b_msg);
+    ROS_INFO_STREAM("NearestPoint OBJ_B: \n" << np_object_b_msg);
 
     // Transformation for object_a
     fcl::Transform3f fcl_trans_object_a = object_a->getTransform();
@@ -289,7 +327,7 @@ obstacle_distance::DistanceInfo ObstacleDistance::getDistanceInfo(const boost::s
 
     geometry_msgs::Transform trans_object_a_msg;
     tf::transformTFToMsg(tf_trans_object_a, trans_object_a_msg);
-    ROS_DEBUG_STREAM("Transform OBJ_A: \n" << trans_object_a_msg);
+    ROS_INFO_STREAM("Transform OBJ_A: \n" << trans_object_a_msg);
 
     // Transformation for object_b
     fcl::Transform3f fcl_trans_object_b = object_b->getTransform();
@@ -303,7 +341,7 @@ obstacle_distance::DistanceInfo ObstacleDistance::getDistanceInfo(const boost::s
 
     geometry_msgs::Transform trans_object_b_msg;
     tf::transformTFToMsg(tf_trans_object_b, trans_object_b_msg);
-    ROS_DEBUG_STREAM("Transform OBJ_B: \n" << trans_object_b_msg);
+    ROS_INFO_STREAM("Transform OBJ_B: \n" << trans_object_b_msg);
 
     //  in case both objects are of OBJECT_TYPE OT_BVH the nearest points are already given in PlanningFrame coordinates
     if(!(object_a->getObjectType() == fcl::OT_BVH && object_b->getObjectType() == fcl::OT_BVH))
@@ -320,8 +358,8 @@ obstacle_distance::DistanceInfo ObstacleDistance::getDistanceInfo(const boost::s
 
     tf::vectorEigenToMsg(np_object_a, info.nearest_point_frame_vector);
     tf::vectorEigenToMsg(np_object_b, info.nearest_point_obstacle_vector);    
-    ROS_DEBUG_STREAM("NearestPointTransformed OBJ_A: \n" << info.nearest_point_frame_vector);
-    ROS_DEBUG_STREAM("NearestPointTransformed OBJ_B: \n" << info.nearest_point_obstacle_vector);
+    ROS_INFO_STREAM("NearestPointTransformed OBJ_A: \n" << info.nearest_point_frame_vector);
+    ROS_INFO_STREAM("NearestPointTransformed OBJ_B: \n" << info.nearest_point_obstacle_vector);
 
     return info;
 }

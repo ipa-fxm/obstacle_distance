@@ -20,6 +20,8 @@
 #include <eigen_conversions/eigen_msg.h>
 #include <tf_conversions/tf_eigen.h>
 
+#include <fcl/octree.h>
+
 
 class ObstacleDistance
 {
